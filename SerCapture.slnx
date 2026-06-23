@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="SerCapture.Ser/SerCapture.Ser.csproj" />
+  <Project Path="SerCapture.SerTest/SerCapture.SerTest.csproj" />
+  <Project Path="SerCapture/SerCapture.csproj" />
+</Solution>
