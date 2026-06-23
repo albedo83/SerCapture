@@ -9,3 +9,10 @@ obj/
 ## folder on case-insensitive Windows, so scope it to generated locations only)
 /out/
 **/bin/**/*.ser
+
+## Distribution artifacts
+/dist/
+
+## Local-only working notes (kept out of the public repo)
+CLAUDE.md
+MEMORY.md
