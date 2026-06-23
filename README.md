@@ -1,63 +1,68 @@
 # SER Capture — a NINA plugin
 
-> Capture a burst of raw frames into a single `.ser` file (lucky imaging) straight from the
-> NINA advanced sequencer, instead of a pile of FITS.
+> Record your normal NINA imaging into a single `.ser` file (lucky imaging) instead of a pile
+> of FITS — by replacing just the `Take Exposure` instruction.
 
-**SER Capture** adds a **“Take SER Exposures”** instruction to the [NINA](https://nighttime-imaging.eu/)
-advanced sequencer. Each run records *N* raw frames into one [SER](https://free-astro.org/index.php/SER)
-video file — the format expected by lucky-imaging / planetary stacking tools
-(Siril, PIPP, AutoStakkert, SER Player). The rest of the sequencer keeps doing its job
-*around* the instruction: loops, filter changes, dithering, autofocus and meridian flips.
+**SER Capture** lets you keep your usual advanced-sequencer setup (loops, filter changes,
+dithering, autofocus, meridian flip — all the native triggers) and only swap the capture step:
+drop **`Capture SER Frame`** in place of `Take Exposure`, between **`Start SER Recording`** and
+**`Stop SER Recording`**. Every frame is appended to one [SER](https://free-astro.org/index.php/SER)
+video file — the format expected by lucky-imaging / planetary stacking tools (Siril, PIPP,
+AutoStakkert, SER Player).
 
 ## Why
 
 NINA excels at deep-sky imaging, where each exposure becomes a calibrated FITS file. For
-**lucky imaging** you instead want hundreds or thousands of short raw frames bundled into a
-single SER file, with no per-frame debayering, stretching or star detection. SER Capture
-bypasses that per-image post-processing and streams the raw sensor data directly to disk.
+**lucky imaging** you instead want hundreds or thousands of raw frames bundled into a single
+SER file. `Capture SER Frame` captures and writes the raw frame **directly** — no PrepareImage,
+no star detection, no FITS — so the per-frame overhead stays low enough for lucky imaging, while
+the rest of the sequence (and every native trigger) is untouched.
+
+## Instructions
+
+| Instruction | Role |
+|---|---|
+| **Start SER Recording** | Opens a new `.ser` (output folder field). Place before the capture loop. |
+| **Capture SER Frame** | Drop-in replacement for `Take Exposure`: captures one raw frame into the open `.ser`. Exposure / gain / offset / binning fields. |
+| **Stop SER Recording** | Writes the trailer, patches the final frame count and closes the file. |
 
 ## Features
 
-- One **`Take SER Exposures`** instruction, native to the advanced sequencer.
-- Streams **raw, undebayered** 16-bit frames — the SER `ColorID` carries the Bayer pattern so
-  the stacker debayers later.
-- Correct SER header: `LUCAM-RECORDER`, little-endian data, `ColorID` derived from the camera’s
-  sensor type, `FrameCount` patched on completion, and a per-frame UTC timestamp trailer.
-- **Inline autofocus / dither**: the whole burst is one `.ser`; set *AF every N* / *Dither every N*
-  to run NINA's own autofocus and dither routines mid-capture (e.g. autofocus at frame 1800 of 3600),
-  after which the same file keeps growing. No Loop or triggers to assemble — one instruction.
-- **Cancellation-safe**: stopping mid-capture still produces a valid `.ser` containing the
-  frames recorded so far (the frame count is patched, no corrupt file).
-- **Streaming writer**: frames are flushed straight to disk; only the timestamp list is kept in RAM.
-- Editable settings in the sequencer: exposure, gain, offset, binning, frame count, output folder.
-- Validation: warns when the camera is disconnected, the frame count is invalid, or there isn’t
-  enough free disk space.
+- **Drop-in**: `Capture SER Frame` replaces `Take Exposure`; the loop, conditions and **all native
+  triggers** (meridian flip, autofocus, dither, …) work exactly as before. It implements
+  `IExposureItem` and registers one LIGHT image-history entry per frame, so "after N exposures"
+  triggers count frames and fire between them — including in the middle of one `.ser`.
+- **Lean / fast**: no PrepareImage, no star detection, no FITS write per frame — suited to lucky imaging.
+- Streams **raw, undebayered** 16-bit frames — the SER `ColorID` carries the Bayer pattern so the
+  stacker debayers later.
+- Correct SER header: `LUCAM-RECORDER`, little-endian data (flag `0`), `ColorID` from the camera’s
+  sensor type, `FrameCount` patched **every frame**, per-frame UTC timestamp trailer on finalize.
+- **Crash-safe**: the `.ser` is valid at any moment (frame count patched + flushed each frame), so an
+  aborted sequence or a NINA crash still leaves an openable file (only the optional trailer is missing).
+- **Cadence log**: each frame logs capture/write times and the achieved fps (status bar + NINA log).
 
 ## How it fits into a sequence
 
-One execution of the instruction = one `.ser` file = **one** sequencer “exposure” event, so
-triggers (autofocus / dither after *N* exposures) count SER files, not individual frames:
-
 ```
-Loop until 03:00
- ├─ Switch Filter (Ha)
- ├─ Take SER  (N frames × t sec)     ← this instruction
- ├─ Dither
- └─ [trigger] Autofocus after 1 exposure
+Start SER Recording                 (output folder)
+Loop container        [triggers: Meridian Flip, Autofocus After N, Dither After N — native]
+  └─ Capture SER Frame              (replaces Take Exposure)
+Stop SER Recording
 ```
 
-Each loop = one SER = one dither = optionally one autofocus.
+A meridian flip in the middle keeps writing to the **same** `.ser` (post-flip frames are rotated
+180°, to be handled at processing time).
 
 ## Status
 
 | Phase | Description | State |
 |------:|-------------|:-----:|
 | 0 | Strategy (build from scratch — *Lucky Imaging* plugin is closed-source) | ✅ |
-| 1 | Plugin skeleton (instruction appears in the sequencer) | ✅ |
+| 1 | Plugin skeleton | ✅ |
 | 2 | `SerWriter` + standalone format tests | ✅ |
 | 3 | Capture wired to the camera/imaging mediators | ✅ |
 | 4 | UI (DataTemplate) + validation | ✅ |
-| 5 | Inline autofocus / dither at frame intervals (one .ser) | ✅ |
+| 5 | Start/Capture/Stop recording — drop-in for Take Exposure, native triggers, no FITS | ✅ |
 | 6 | Field validation on real cameras (ASI294MC Pro, ToupTek G3M2210M) | ⬜ |
 
 Validated against the NINA camera simulator: a 640×480 / 20-frame `.ser` opens correctly in

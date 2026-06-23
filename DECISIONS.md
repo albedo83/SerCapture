@@ -81,22 +81,39 @@ Flaggé et tranché avec l'utilisateur.
 - Conséquence : l'instruction atomique `TakeSerExposures` (Phases 3-4) **ne déclenche aucun trigger**
   (ni IExposureItem, ni entrée d'historique) → réservée aux bursts sans trigger intermédiaire.
 
-**Architecture retenue (2026-06-23, finale) : un seul bloc `TakeSerExposures` avec AF/dither inline.**
-Le montage en 3 items + containers a d'abord été livré, puis **abandonné** : l'utilisateur le trouvait
-trop pénible (deux containers imbriqués à monter). Décision finale : tout dans **une seule instruction**.
-- `TakeSerExposures` : boucle interne de `FrameCount` poses → **un seul .ser** ; champs `AutofocusEvery`
-  et `DitherEvery`. Au milieu de la boucle (jamais après la dernière frame), si dû, on invoque les
-  **vraies routines NINA** : `new RunAutofocus(...).Execute(...)` (autofocus) et `guiderMediator.Dither(token)`.
-  Vérifié par décompilation que `RunAutofocus.Execute`/`Dither.Execute` ne dépendent pas du `Parent`,
-  donc invocables en standalone. → AF s'exécute à la frame 1800 d'un 3600 et la capture reprend dans
-  le même fichier. UI = `SequenceBlockView` (déjà maîtrisée, faible risque).
-- **Robustesse abandon** : `SerWriter` patché à **chaque frame** (`patchFrameCountEachFrame`) → un SER
-  abandonné reste valide (FrameCount correct, trailer optionnel manquant) ; finalisation aussi en `finally`.
-- **Garde AF=0** : on n'appelle l'AF que si `AutofocusEvery > 0` (le trigger natif `AutofocusAfterExposures`
-  ferait sinon un `% 0` → division par zéro).
-- **Limite assumée** : AF/dither sont des champs, pas des triggers NINA ; les triggers du container parent
-  (ex. meridian flip) ne peuvent pas s'intercaler pendant la boucle (un item ne peut être préempté).
-  Si besoin de meridian flip mid-capture → revoir vers un container custom plus tard.
-- Items `StartSerSession`/`CaptureSerFrame`/`FinalizeSerSession` + `SerSession` : **supprimés** (remplacés
-  par le bloc unique). `CaptureSerFrame` était un `IExposureItem` qui appelait `imageHistoryVM.Add(...)` —
-  motif conservé en référence dans MEMORY si on refait un container.
+**Architecture retenue (2026-06-23, FINALE) : `Capture SER Frame` remplace `Take Exposure`.**
+Le flux NINA normal reste **inchangé** (loop + conditions + triggers natifs). On ne remplace que l'étape
+de capture. Trois instructions :
+- `StartSerRecording` : ouvre une session `.ser` (dossier + filtre courant). À poser avant la boucle.
+- `CaptureSerFrame` : **`IExposureItem` LIGHT**, remplaçant de `Take Exposure`. Fait
+  `CaptureImage → ToImageData → SerRecorder.WriteFrame` (**aucun PrepareImage / star-detect / FITS**),
+  puis `imageHistoryVM.Add(...)`. Écriture **synchrone** dans l'`Execute`.
+- `StopSerRecording` : finalise (trailer + FrameCount) et ferme.
+- État partagé : `SerRecorder` (statique).
+
+**Pourquoi (vs les approches rejetées) :**
+- Performance lucky : le hook `BeforeImageSaved` (intercepter la sauvegarde NINA) imposait le pipeline
+  lourd par frame (prepare + star-detect + écriture FITS). `Capture SER Frame` court-circuite tout ça.
+- Triggers : étant un `IExposureItem` LIGHT qui s'inscrit dans l'historique, les triggers natifs
+  (meridian flip, AF, dither « after N ») le comptent et s'intercalent **entre les frames** → le flip
+  est géré **par NINA**, rien à répliquer.
+- Écriture synchrone dans l'item → **pas de race** au Stop (contrairement au hook, où la sauvegarde
+  asynchrone de la dernière pose arrivait après le Stop : perdait 1 frame + laissait son FITS).
+
+**Sécurité des captures :**
+- `SerWriter` patché à **chaque frame** (`patchFrameCountEachFrame`) + flush (le Seek flushe) → le `.ser`
+  est **valide à tout instant** ; un abandon / crash NINA / coupure laisse un fichier ouvrable (au pire
+  la dernière frame partielle ignorée, trailer optionnel manquant).
+- `SerRecorder` finalise un éventuel writer resté ouvert au prochain `Start` (CloseDangling) **et** au
+  `Teardown` du plugin (fermeture NINA gracieuse) ; accès sérialisés par un `lock`.
+- `StartSerRecording.Validate` vérifie que le dossier de sortie est inscriptible (fail-fast avant capture).
+
+**Rejeté :** (a) **hook FITS→SER** — overhead FITS+prepare par frame (relevé par l'utilisateur), pas
+d'annulation propre de l'écriture FITS ; (b) **bloc unique `TakeSerExposures` avec AF/dither inline** —
+réécrivait la logique des triggers et ne gérait pas le meridian flip ; supprimé.
+
+**Limite assumée :** un meridian flip au milieu = frames post-flip tournées 180° dans le **même** `.ser`
+(choix utilisateur : un seul fichier continu) ; à gérer au traitement.
+
+**Effet cosmétique connu :** comme aucun FITS n'est écrit, les vignettes de l'historique d'images NINA
+peuvent être absentes (les triggers, eux, n'ont besoin que du compteur d'historique).

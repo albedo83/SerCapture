@@ -1,0 +1,48 @@
+<ResourceDictionary
+    x:Class="SerCapture.Sequencer.SerCaptureTemplates"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:SerCapture.Sequencer"
+    xmlns:nina="clr-namespace:NINA.View.Sequencer;assembly=NINA.Sequencer">
+
+    <DataTemplate DataType="{x:Type local:StartSerRecording}">
+        <nina:SequenceBlockView>
+            <nina:SequenceBlockView.SequenceItemContent>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Text="SER folder" />
+                    <TextBox MinWidth="180" Margin="5,0,0,0" Text="{Binding OutputDirectory}"
+                             ToolTip="Leave empty to use the profile's image folder" />
+                </StackPanel>
+            </nina:SequenceBlockView.SequenceItemContent>
+        </nina:SequenceBlockView>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:CaptureSerFrame}">
+        <nina:SequenceBlockView>
+            <nina:SequenceBlockView.SequenceItemContent>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Text="Exposure" />
+                    <TextBox MinWidth="45" Margin="5,0,12,0" Text="{Binding ExposureTime}" TextAlignment="Right" />
+
+                    <TextBlock VerticalAlignment="Center" Text="s   Gain" />
+                    <TextBox MinWidth="40" Margin="5,0,12,0" Text="{Binding Gain}" TextAlignment="Right" />
+
+                    <TextBlock VerticalAlignment="Center" Text="Offset" />
+                    <TextBox MinWidth="40" Margin="5,0,12,0" Text="{Binding Offset}" TextAlignment="Right" />
+
+                    <TextBlock VerticalAlignment="Center" Text="Bin" />
+                    <TextBox MinWidth="28" Margin="5,0,0,0" Text="{Binding Bin}" TextAlignment="Right" />
+                </StackPanel>
+            </nina:SequenceBlockView.SequenceItemContent>
+        </nina:SequenceBlockView>
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type local:StopSerRecording}">
+        <nina:SequenceBlockView>
+            <nina:SequenceBlockView.SequenceItemContent>
+                <TextBlock VerticalAlignment="Center" Text="Finalize and close the .ser file" />
+            </nina:SequenceBlockView.SequenceItemContent>
+        </nina:SequenceBlockView>
+    </DataTemplate>
+
+</ResourceDictionary>

@@ -37,9 +37,9 @@ namespace SerCapture.Ser {
         /// <param name="telescope">Telescope name (header, 40 bytes).</param>
         /// <param name="patchFrameCountEachFrame">
         /// When true, the FrameCount field is patched after every frame so the file stays a valid SER
-        /// even if <see cref="FinalizeFile"/> is never called (e.g. a sequence aborted between a
-        /// "Start SER Session" and "Finalize SER Session"). The timestamp trailer is still only
-        /// written on finalize. Adds one small seek per frame.
+        /// even if <see cref="FinalizeFile"/> is never called (e.g. a sequence aborted before
+        /// "Stop SER Recording"). The timestamp trailer is still only written on finalize.
+        /// Adds one small seek per frame.
         /// </param>
         public SerWriter(string path, int width, int height, SerColorId colorId,
                          string observer = "", string instrument = "", string telescope = "",
