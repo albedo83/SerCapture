@@ -22,6 +22,6 @@ using System.Runtime.InteropServices;
 
 [assembly: AssemblyMetadata("License", "MPL-2.0")]
 [assembly: AssemblyMetadata("LicenseURL", "https://www.mozilla.org/en-US/MPL/2.0/")]
-[assembly: AssemblyMetadata("Repository", "")]
+[assembly: AssemblyMetadata("Repository", "https://github.com/albedo83/SerCapture")]
 
 [assembly: ComVisible(false)]
