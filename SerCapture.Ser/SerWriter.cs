@@ -24,6 +24,7 @@ namespace SerCapture.Ser {
         private readonly FileStream _stream;
         private readonly int _pixelsPerFrame;
         private readonly List<long> _timestamps = new();
+        private readonly bool _patchFrameCountEachFrame;
         private int _frameCount;
         private bool _finalized;
 
@@ -34,11 +35,19 @@ namespace SerCapture.Ser {
         /// <param name="observer">Observer name (header, 40 bytes).</param>
         /// <param name="instrument">Camera name (header, 40 bytes).</param>
         /// <param name="telescope">Telescope name (header, 40 bytes).</param>
+        /// <param name="patchFrameCountEachFrame">
+        /// When true, the FrameCount field is patched after every frame so the file stays a valid SER
+        /// even if <see cref="FinalizeFile"/> is never called (e.g. a sequence aborted between a
+        /// "Start SER Session" and "Finalize SER Session"). The timestamp trailer is still only
+        /// written on finalize. Adds one small seek per frame.
+        /// </param>
         public SerWriter(string path, int width, int height, SerColorId colorId,
-                         string observer = "", string instrument = "", string telescope = "") {
+                         string observer = "", string instrument = "", string telescope = "",
+                         bool patchFrameCountEachFrame = false) {
             if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
             if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
 
+            _patchFrameCountEachFrame = patchFrameCountEachFrame;
             _pixelsPerFrame = width * height;
             _stream = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.Read,
                                      bufferSize: 1 << 20);
@@ -75,6 +84,15 @@ namespace SerCapture.Ser {
             _stream.Write(MemoryMarshal.AsBytes(raw));
             _timestamps.Add(utcTimestamp.Ticks);
             _frameCount++;
+
+            if (_patchFrameCountEachFrame) {
+                long end = _stream.Position;
+                _stream.Seek(FrameCountOffset, SeekOrigin.Begin);
+                Span<byte> fc = stackalloc byte[4];
+                BinaryPrimitives.WriteInt32LittleEndian(fc, _frameCount);
+                _stream.Write(fc);
+                _stream.Seek(end, SeekOrigin.Begin);
+            }
         }
 
         /// <summary>

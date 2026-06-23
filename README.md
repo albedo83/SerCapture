@@ -23,6 +23,9 @@ bypasses that per-image post-processing and streams the raw sensor data directly
   the stacker debayers later.
 - Correct SER header: `LUCAM-RECORDER`, little-endian data, `ColorID` derived from the camera’s
   sensor type, `FrameCount` patched on completion, and a per-frame UTC timestamp trailer.
+- **Inline autofocus / dither**: the whole burst is one `.ser`; set *AF every N* / *Dither every N*
+  to run NINA's own autofocus and dither routines mid-capture (e.g. autofocus at frame 1800 of 3600),
+  after which the same file keeps growing. No Loop or triggers to assemble — one instruction.
 - **Cancellation-safe**: stopping mid-capture still produces a valid `.ser` containing the
   frames recorded so far (the frame count is patched, no corrupt file).
 - **Streaming writer**: frames are flushed straight to disk; only the timestamp list is kept in RAM.
@@ -54,7 +57,8 @@ Each loop = one SER = one dither = optionally one autofocus.
 | 2 | `SerWriter` + standalone format tests | ✅ |
 | 3 | Capture wired to the camera/imaging mediators | ✅ |
 | 4 | UI (DataTemplate) + validation | ✅ |
-| 5 | Field integration on real cameras (loop / filter / dither / autofocus) | ⬜ |
+| 5 | Inline autofocus / dither at frame intervals (one .ser) | ✅ |
+| 6 | Field validation on real cameras (ASI294MC Pro, ToupTek G3M2210M) | ⬜ |
 
 Validated against the NINA camera simulator: a 640×480 / 20-frame `.ser` opens correctly in
 SER Player and PIPP, with a well-formed header and ordered timestamps.

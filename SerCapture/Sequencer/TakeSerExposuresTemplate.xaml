@@ -13,7 +13,7 @@
                     <TextBox MinWidth="45" Margin="5,0,12,0" Text="{Binding ExposureTime}" TextAlignment="Right" />
 
                     <TextBlock VerticalAlignment="Center" Text="s   Frames" />
-                    <TextBox MinWidth="45" Margin="5,0,12,0" Text="{Binding FrameCount}" TextAlignment="Right" />
+                    <TextBox MinWidth="50" Margin="5,0,12,0" Text="{Binding FrameCount}" TextAlignment="Right" />
 
                     <TextBlock VerticalAlignment="Center" Text="Gain" />
                     <TextBox MinWidth="40" Margin="5,0,12,0" Text="{Binding Gain}" TextAlignment="Right" />
@@ -23,6 +23,14 @@
 
                     <TextBlock VerticalAlignment="Center" Text="Bin" />
                     <TextBox MinWidth="28" Margin="5,0,12,0" Text="{Binding Binning}" TextAlignment="Right" />
+
+                    <TextBlock VerticalAlignment="Center" Text="AF every" />
+                    <TextBox MinWidth="45" Margin="5,0,12,0" Text="{Binding AutofocusEvery}" TextAlignment="Right"
+                             ToolTip="Run autofocus after every N frames (0 = never)" />
+
+                    <TextBlock VerticalAlignment="Center" Text="Dither every" />
+                    <TextBox MinWidth="45" Margin="5,0,12,0" Text="{Binding DitherEvery}" TextAlignment="Right"
+                             ToolTip="Dither after every N frames (0 = never)" />
 
                     <TextBlock VerticalAlignment="Center" Text="Folder" />
                     <TextBox MinWidth="140" Margin="5,0,0,0" Text="{Binding OutputDirectory}"

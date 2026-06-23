@@ -64,3 +64,39 @@ NINA, et il n'est pas installé sur la machine. → On construit **from scratch*
 - **Données RAW jamais débayerisées** ; streaming, jamais bufferiser la pile en RAM.
 - **Nommage méthode** : la méthode de finalisation s'appelle `FinalizeFile()` et non
   `Finalize()` (réservé par le GC en C#, redéfinition interdite).
+
+## 6. Triggers & flux « session » (redesign vs plan)
+
+**Besoin réel utilisateur (2026-06-23)** : N poses unitaires (ex. 3600), **un seul fichier .ser**,
+avec un trigger (AF/dither) qui s'exécute **au milieu** (ex. à 1800) puis reprise dans le même SER.
+Cela **contredit** le plan (« une seule SequenceItem, pas de container » + « 1 SER = 1 événement »).
+Flaggé et tranché avec l'utilisateur.
+
+**Mécanique des triggers NINA (décompilée de 3.2.0.9001, certaine) :**
+- `AutofocusAfterExposures.ShouldTrigger` / `DitherAfterExposures.ShouldTrigger` retournent `false`
+  si `nextItem` n'est pas un **`IExposureItem` de type "LIGHT"**.
+- Le compteur lit **`IImageHistoryVM.ImageHistory`** (LIGHT, `Id > lastAutoFocusId`).
+- `TakeExposure` enregistre via `imageHistoryVM.Add(exposureData.MetaData.Image.Id, ImageType)`.
+- Un trigger ne s'exécute **qu'entre deux items** (jamais pendant un `Execute`).
+- Conséquence : l'instruction atomique `TakeSerExposures` (Phases 3-4) **ne déclenche aucun trigger**
+  (ni IExposureItem, ni entrée d'historique) → réservée aux bursts sans trigger intermédiaire.
+
+**Architecture retenue (2026-06-23, finale) : un seul bloc `TakeSerExposures` avec AF/dither inline.**
+Le montage en 3 items + containers a d'abord été livré, puis **abandonné** : l'utilisateur le trouvait
+trop pénible (deux containers imbriqués à monter). Décision finale : tout dans **une seule instruction**.
+- `TakeSerExposures` : boucle interne de `FrameCount` poses → **un seul .ser** ; champs `AutofocusEvery`
+  et `DitherEvery`. Au milieu de la boucle (jamais après la dernière frame), si dû, on invoque les
+  **vraies routines NINA** : `new RunAutofocus(...).Execute(...)` (autofocus) et `guiderMediator.Dither(token)`.
+  Vérifié par décompilation que `RunAutofocus.Execute`/`Dither.Execute` ne dépendent pas du `Parent`,
+  donc invocables en standalone. → AF s'exécute à la frame 1800 d'un 3600 et la capture reprend dans
+  le même fichier. UI = `SequenceBlockView` (déjà maîtrisée, faible risque).
+- **Robustesse abandon** : `SerWriter` patché à **chaque frame** (`patchFrameCountEachFrame`) → un SER
+  abandonné reste valide (FrameCount correct, trailer optionnel manquant) ; finalisation aussi en `finally`.
+- **Garde AF=0** : on n'appelle l'AF que si `AutofocusEvery > 0` (le trigger natif `AutofocusAfterExposures`
+  ferait sinon un `% 0` → division par zéro).
+- **Limite assumée** : AF/dither sont des champs, pas des triggers NINA ; les triggers du container parent
+  (ex. meridian flip) ne peuvent pas s'intercaler pendant la boucle (un item ne peut être préempté).
+  Si besoin de meridian flip mid-capture → revoir vers un container custom plus tard.
+- Items `StartSerSession`/`CaptureSerFrame`/`FinalizeSerSession` + `SerSession` : **supprimés** (remplacés
+  par le bloc unique). `CaptureSerFrame` était un `IExposureItem` qui appelait `imageHistoryVM.Add(...)` —
+  motif conservé en référence dans MEMORY si on refait un container.
